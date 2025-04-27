@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>小鹅闭眼检测 - 稳定版</title>
+  <title>闭上眼睛的小鹅 - 修正版</title>
   <style>
     body {
       background-color: black;
@@ -44,13 +44,12 @@
 
 <video id="video" autoplay playsinline muted></video>
 
-<!-- 引入 TensorFlow.js 和 人脸检测模型 -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
-<script src="https://cdn.jsdelivr.net/npm/tone"></script>
+<!-- 注意这里：整个脚本用 type="module"了！ -->
+<script type="module">
+import * as faceLandmarksDetection from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.3/dist/face-landmarks-detection.esm.js';
+import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.14.0/dist/tf-core.esm.js';
+import { Tone } from 'https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js';
 
-<script>
 const goose = document.getElementById('goose');
 const message = document.getElementById('message');
 const video = document.getElementById('video');
@@ -67,12 +66,12 @@ function playMusic() {
   synth.triggerAttackRelease('G4', '8n', '+1');
 }
 
-// 检测眼睛是否闭上（用左眼内外角 landmark）
+// 检测眼睛是否闭上
 function isEyesClosed(landmarks) {
   const leftTop = landmarks[159];
   const leftBottom = landmarks[145];
   const distance = Math.hypot(leftTop.x - leftBottom.x, leftTop.y - leftBottom.y);
-  return distance < 0.005; // 根据眼睛张开度调整阈值
+  return distance < 0.005;
 }
 
 // 点击开始
@@ -80,7 +79,6 @@ startButton.addEventListener('click', async () => {
   startButton.style.display = 'none';
   message.innerText = "小鹅说：快闭上眼睛～";
 
-  // 打开摄像头
   const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   video.srcObject = stream;
   await video.play();
