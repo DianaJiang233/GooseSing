@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>闭上眼睛的小鹅 - 稳定版</title>
+  <title>小鹅闭眼检测 - 稳定版</title>
   <style>
     body {
       background-color: black;
@@ -44,9 +44,10 @@
 
 <video id="video" autoplay playsinline muted></video>
 
-<!-- 引入 FaceMesh 和 CameraUtils 和 Tone.js -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<!-- 引入 TensorFlow.js 和 人脸检测模型 -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone"></script>
 
 <script>
@@ -55,9 +56,8 @@ const message = document.getElementById('message');
 const video = document.getElementById('video');
 const startButton = document.getElementById('startButton');
 
+let model;
 let playingMusic = false;
-let faceDetected = false;
-let faceCheckTimer;
 
 // 音乐合成器
 const synth = new Tone.Synth().toDestination();
@@ -67,31 +67,40 @@ function playMusic() {
   synth.triggerAttackRelease('G4', '8n', '+1');
 }
 
-// 检测眼睛是否闭上
+// 检测眼睛是否闭上（用左眼内外角 landmark）
 function isEyesClosed(landmarks) {
-  const top = landmarks[159];
-  const bottom = landmarks[145];
-  const distance = Math.hypot(top.x - bottom.x, top.y - bottom.y);
-  return distance < 0.01;
+  const leftTop = landmarks[159];
+  const leftBottom = landmarks[145];
+  const distance = Math.hypot(leftTop.x - leftBottom.x, leftTop.y - leftBottom.y);
+  return distance < 0.005; // 根据眼睛张开度调整阈值
 }
 
-// 初始化FaceMesh
-const faceMesh = new FaceMesh.FaceMesh({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+// 点击开始
+startButton.addEventListener('click', async () => {
+  startButton.style.display = 'none';
+  message.innerText = "小鹅说：快闭上眼睛～";
+
+  // 打开摄像头
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+  await video.play();
+
+  // 加载模型
+  model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
+
+  detectLoop();
 });
 
-faceMesh.setOptions({
-  maxNumFaces: 1,
-  refineLandmarks: true,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
-});
+// 循环检测
+async function detectLoop() {
+  if (!model) return;
 
-faceMesh.onResults(results => {
-  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-    faceDetected = true;
-    const landmarks = results.multiFaceLandmarks[0];
-    if (isEyesClosed(landmarks)) {
+  const predictions = await model.estimateFaces({input: video, returnTensors: false});
+  
+  if (predictions.length > 0) {
+    const keypoints = predictions[0].scaledMesh;
+
+    if (isEyesClosed(keypoints)) {
       message.innerText = "鹅在演奏音乐🎵";
       goose.innerText = "🎶🪿🎶";
       if (!playingMusic) {
@@ -104,42 +113,13 @@ faceMesh.onResults(results => {
       goose.innerText = "😠🪿";
       playingMusic = false;
     }
+  } else {
+    message.innerText = "小鹅找不到你的脸呢～";
+    goose.innerText = "❓🪿";
   }
-});
 
-// 点击开始按钮后
-startButton.addEventListener('click', async () => {
-  startButton.style.display = 'none';
-  message.innerText = "小鹅说：快闭上眼睛～";
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
-
-    const camera = new CameraUtils.Camera(video, {
-      onFrame: async () => {
-        await faceMesh.send({ image: video });
-      },
-      width: 640,
-      height: 480
-    });
-    camera.start();
-
-    // 5秒内如果检测不到人脸，自动提示
-    faceCheckTimer = setTimeout(() => {
-      if (!faceDetected) {
-        message.innerText = "小鹅找不到你的脸哦，请对准摄像头！";
-        goose.innerText = "❓🪿";
-      }
-    }, 5000);
-
-  } catch (e) {
-    console.error("摄像头启动失败！", e);
-    message.innerText = "无法访问摄像头！请检查权限！";
-    goose.innerText = "❌🪿";
-  }
-});
+  requestAnimationFrame(detectLoop);
+}
 </script>
 
 </body>
