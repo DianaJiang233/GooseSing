@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>闭上眼睛的小鹅</title>
+  <title>闭上眼睛的小鹅 - 稳定版</title>
   <style>
     body {
       background-color: black;
@@ -42,10 +42,10 @@
 <div id="message">请点击下面按钮开始</div>
 <button id="startButton">开始</button>
 
-<video id="video" autoplay playsinline></video>
+<video id="video" autoplay playsinline muted></video>
 
-<!-- 引入 FaceMesh 和 Tone.js -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.min.js"></script>
+<!-- 引入 FaceMesh 和 CameraUtils 和 Tone.js -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tone"></script>
 
@@ -56,8 +56,10 @@ const video = document.getElementById('video');
 const startButton = document.getElementById('startButton');
 
 let playingMusic = false;
+let faceDetected = false;
+let faceCheckTimer;
 
-// 用 Tone.js 生成简单的旋律
+// 音乐合成器
 const synth = new Tone.Synth().toDestination();
 function playMusic() {
   synth.triggerAttackRelease('C4', '8n');
@@ -70,13 +72,14 @@ function isEyesClosed(landmarks) {
   const top = landmarks[159];
   const bottom = landmarks[145];
   const distance = Math.hypot(top.x - bottom.x, top.y - bottom.y);
-  return distance < 0.01; // 眼睛垂直距离小，说明闭上了
+  return distance < 0.01;
 }
 
-// 初始化 FaceMesh
+// 初始化FaceMesh
 const faceMesh = new FaceMesh.FaceMesh({
   locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
 });
+
 faceMesh.setOptions({
   maxNumFaces: 1,
   refineLandmarks: true,
@@ -84,16 +87,16 @@ faceMesh.setOptions({
   minTrackingConfidence: 0.5
 });
 
-// 分析检测结果
 faceMesh.onResults(results => {
   if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    faceDetected = true;
     const landmarks = results.multiFaceLandmarks[0];
     if (isEyesClosed(landmarks)) {
       message.innerText = "鹅在演奏音乐🎵";
       goose.innerText = "🎶🪿🎶";
       if (!playingMusic) {
         playingMusic = true;
-        Tone.start(); // 用户交互后才能触发
+        Tone.start();
         playMusic();
       }
     } else {
@@ -104,24 +107,38 @@ faceMesh.onResults(results => {
   }
 });
 
-// 点击开始按钮后，初始化摄像头和检测
+// 点击开始按钮后
 startButton.addEventListener('click', async () => {
   startButton.style.display = 'none';
   message.innerText = "小鹅说：快闭上眼睛～";
 
-  // 请求摄像头权限
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
-  await video.play();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await video.play();
 
-  const camera = new CameraUtils.Camera(video, {
-    onFrame: async () => {
-      await faceMesh.send({ image: video });
-    },
-    width: 640,
-    height: 480
-  });
-  camera.start();
+    const camera = new CameraUtils.Camera(video, {
+      onFrame: async () => {
+        await faceMesh.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+
+    // 5秒内如果检测不到人脸，自动提示
+    faceCheckTimer = setTimeout(() => {
+      if (!faceDetected) {
+        message.innerText = "小鹅找不到你的脸哦，请对准摄像头！";
+        goose.innerText = "❓🪿";
+      }
+    }, 5000);
+
+  } catch (e) {
+    console.error("摄像头启动失败！", e);
+    message.innerText = "无法访问摄像头！请检查权限！";
+    goose.innerText = "❌🪿";
+  }
 });
 </script>
 
