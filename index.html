@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>闭上眼睛的小鹅 - 修正版</title>
+  <title>闭上眼睛的小鹅 - 稳定修正完美版</title>
   <style>
     body {
       background-color: black;
@@ -44,10 +44,9 @@
 
 <video id="video" autoplay playsinline muted></video>
 
-<!-- 注意这里：整个脚本用 type="module"了！ -->
+<!-- 正确引用，不需要自己引tfjs -->
 <script type="module">
-import * as faceLandmarksDetection from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.3/dist/face-landmarks-detection.esm.js';
-import * as tf from 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.14.0/dist/tf-core.esm.js';
+import * as faceLandmarksDetection from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.esm.js';
 import { Tone } from 'https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js';
 
 const goose = document.getElementById('goose');
@@ -83,7 +82,6 @@ startButton.addEventListener('click', async () => {
   video.srcObject = stream;
   await video.play();
 
-  // 加载模型
   model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
 
   detectLoop();
