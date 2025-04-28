@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>眼睛状态检测</title>
+  <title>鹅唱歌检测</title>
   <style>
     body {
       margin: 0;
@@ -19,22 +19,34 @@
       border-radius: 10px;
     }
     #status {
-      font-size: 48px;
+      font-size: 36px;
       margin-top: 20px;
+    }
+    #goose {
+      margin-top: 20px;
+      display: none;
+      width: 200px;
+      height: auto;
     }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs" type="module"></script>
 </head>
 <body>
-  <h1>👀 眼睛状态检测</h1>
+  <h1>🪿 闭眼让鹅唱歌 🎵</h1>
   <video id="video" autoplay playsinline></video>
   <div id="status">加载中...</div>
+  <img id="goose" src="https://upload.wikimedia.org/wikipedia/commons/7/7b/Goose_icon.png" alt="唱歌的鹅">
+  <audio id="gooseSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_f4a88b6f37.mp3" loop></audio>
 
   <script type="module">
     import { FilesetResolver, FaceLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
 
     const video = document.getElementById('video');
     const statusText = document.getElementById('status');
+    const gooseImg = document.getElementById('goose');
+    const gooseSound = document.getElementById('gooseSound');
+
+    let isGooseSinging = false;
 
     async function init() {
       const vision = await FilesetResolver.forVisionTasks(
@@ -52,7 +64,6 @@
         numFaces: 1,
       });
 
-      // 打开摄像头
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
 
@@ -68,15 +79,39 @@
         if (results.faceLandmarks.length > 0) {
           const landmarks = results.faceLandmarks[0];
 
-          // 检测两只眼睛的状态
-          const leftEyeOpenScore = getEyeOpenScore(landmarks, 159, 145); // 左眼
-          const rightEyeOpenScore = getEyeOpenScore(landmarks, 386, 374); // 右眼
-          
+          const leftEyeOpenScore = getEyeOpenScore(landmarks, 159, 145);
+          const rightEyeOpenScore = getEyeOpenScore(landmarks, 386, 374);
+
           const eyeOpen = (leftEyeOpenScore > 0.02) && (rightEyeOpenScore > 0.02);
 
-          statusText.textContent = eyeOpen ? "睁眼" : "闭眼";
+          if (eyeOpen) {
+            // 睁眼状态
+            statusText.textContent = "请闭眼 💤";
+            gooseImg.style.display = "none";
+            if (isGooseSinging) {
+              gooseSound.pause();
+              gooseSound.currentTime = 0;
+              isGooseSinging = false;
+            }
+          } else {
+            // 闭眼状态
+            statusText.textContent = "鹅在唱歌 🎵";
+            gooseImg.style.display = "block";
+            if (!isGooseSinging) {
+              gooseSound.play().catch(e => {
+                console.log("播放出错，可能是浏览器安全限制，需要用户先点一下页面", e);
+              });
+              isGooseSinging = true;
+            }
+          }
         } else {
           statusText.textContent = "未检测到人脸";
+          gooseImg.style.display = "none";
+          if (isGooseSinging) {
+            gooseSound.pause();
+            gooseSound.currentTime = 0;
+            isGooseSinging = false;
+          }
         }
 
         requestAnimationFrame(detect);
