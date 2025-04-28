@@ -17,10 +17,12 @@
       height: 240px;
       border: 2px solid #fff;
       border-radius: 10px;
+      display: none; /* 点按钮前先隐藏 */
     }
     #status {
       font-size: 36px;
       margin-top: 20px;
+      display: none; /* 点按钮前隐藏 */
     }
     #goose {
       margin-top: 20px;
@@ -28,15 +30,36 @@
       width: 200px;
       height: auto;
     }
+    #startButton {
+      margin-top: 100px;
+      font-size: 24px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs" type="module"></script>
 </head>
 <body>
   <h1>🪿 闭眼让鹅唱歌 🎵</h1>
+
+  <!-- 点击开始按钮 -->
+  <button id="startButton">点击开始</button>
+
+  <!-- 摄像头画面 -->
   <video id="video" autoplay playsinline></video>
+
+  <!-- 状态文本 -->
   <div id="status">加载中...</div>
+
+  <!-- 鹅图片 -->
   <img id="goose" src="https://upload.wikimedia.org/wikipedia/commons/7/7b/Goose_icon.png" alt="唱歌的鹅">
-  <audio id="gooseSound" src="https://github.com/WeifanJiang233/lalalan/blob/main/dong1.mp3" loop></audio>
+
+  <!-- 鹅的歌 -->
+  <audio id="gooseSound" src="你的真正mp3链接" loop></audio>
 
   <script type="module">
     import { FilesetResolver, FaceLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
@@ -45,8 +68,18 @@
     const statusText = document.getElementById('status');
     const gooseImg = document.getElementById('goose');
     const gooseSound = document.getElementById('gooseSound');
+    const startButton = document.getElementById('startButton');
 
     let isGooseSinging = false;
+
+    startButton.addEventListener('click', async () => {
+      // 用户点击后，隐藏按钮，显示视频和状态文字
+      startButton.style.display = 'none';
+      video.style.display = 'block';
+      statusText.style.display = 'block';
+
+      await init(); // 点了之后才初始化
+    });
 
     async function init() {
       const vision = await FilesetResolver.forVisionTasks(
@@ -97,7 +130,7 @@
             gooseImg.style.display = "block";
             if (!isGooseSinging) {
               gooseSound.play().catch(e => {
-                console.log("播放出错，点一下页面！", e);
+                console.log("播放出错！", e);
               });
               isGooseSinging = true;
             }
@@ -124,8 +157,6 @@
       const dy = bottom.y - top.y;
       return dy;
     }
-
-    init();
   </script>
 </body>
 </html>
