@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>闭上眼睛的小鹅 - 稳定修正完美版</title>
+  <title>闭上眼睛的小鹅（最终版）</title>
   <style>
     body {
       background-color: black;
@@ -44,17 +44,17 @@
 
 <video id="video" autoplay playsinline muted></video>
 
-<!-- 正确引用，不需要自己引tfjs -->
-<script type="module">
-import * as faceLandmarksDetection from 'https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection/dist/face-landmarks-detection.esm.js';
-import { Tone } from 'https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js';
+<!-- ✅ 正确加载全局FaceMesh -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
 
+<script>
 const goose = document.getElementById('goose');
 const message = document.getElementById('message');
 const video = document.getElementById('video');
 const startButton = document.getElementById('startButton');
 
-let model;
 let playingMusic = false;
 
 // 音乐合成器
@@ -67,36 +67,28 @@ function playMusic() {
 
 // 检测眼睛是否闭上
 function isEyesClosed(landmarks) {
-  const leftTop = landmarks[159];
-  const leftBottom = landmarks[145];
-  const distance = Math.hypot(leftTop.x - leftBottom.x, leftTop.y - leftBottom.y);
-  return distance < 0.005;
+  const top = landmarks[159];
+  const bottom = landmarks[145];
+  const distance = Math.hypot(top.x - bottom.x, top.y - bottom.y);
+  return distance < 0.01; // 眼睛垂直距离小，说明闭上了
 }
 
-// 点击开始
-startButton.addEventListener('click', async () => {
-  startButton.style.display = 'none';
-  message.innerText = "小鹅说：快闭上眼睛～";
-
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
-  await video.play();
-
-  model = await faceLandmarksDetection.load(faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
-
-  detectLoop();
+// 初始化FaceMesh
+const faceMesh = new FaceMesh.FaceMesh({
+  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
 });
 
-// 循环检测
-async function detectLoop() {
-  if (!model) return;
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
 
-  const predictions = await model.estimateFaces({input: video, returnTensors: false});
-  
-  if (predictions.length > 0) {
-    const keypoints = predictions[0].scaledMesh;
-
-    if (isEyesClosed(keypoints)) {
+faceMesh.onResults(results => {
+  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+    const landmarks = results.multiFaceLandmarks[0];
+    if (isEyesClosed(landmarks)) {
       message.innerText = "鹅在演奏音乐🎵";
       goose.innerText = "🎶🪿🎶";
       if (!playingMusic) {
@@ -109,13 +101,34 @@ async function detectLoop() {
       goose.innerText = "😠🪿";
       playingMusic = false;
     }
-  } else {
-    message.innerText = "小鹅找不到你的脸呢～";
-    goose.innerText = "❓🪿";
   }
+});
 
-  requestAnimationFrame(detectLoop);
-}
+// 点击开始
+startButton.addEventListener('click', async () => {
+  startButton.style.display = 'none';
+  message.innerText = "小鹅说：快闭上眼睛～";
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    await video.play();
+
+    const camera = new CameraUtils.Camera(video, {
+      onFrame: async () => {
+        await faceMesh.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+
+  } catch (e) {
+    console.error("摄像头启动失败", e);
+    message.innerText = "无法打开摄像头，请检查权限。";
+    goose.innerText = "❌🪿";
+  }
+});
 </script>
 
 </body>
