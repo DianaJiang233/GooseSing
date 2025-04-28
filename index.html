@@ -1,135 +1,154 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <title>闭上眼睛的小鹅（最终版）</title>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Face Landmarker + 小鹅唱歌版</title>
+
+  <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
+  <!-- 加Tone.js用于音乐 -->
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+
   <style>
-    body {
-      background-color: black;
-      color: white;
-      text-align: center;
-      font-family: sans-serif;
-      margin-top: 50px;
-    }
     #goose {
       font-size: 100px;
       margin-top: 20px;
+      text-align: center;
     }
-    #message {
-      margin-top: 20px;
+    #gooseMessage {
+      text-align: center;
       font-size: 24px;
+      margin-top: 10px;
+      color: white;
     }
-    #startButton {
-      margin-top: 30px;
-      padding: 10px 20px;
-      font-size: 20px;
-      border: none;
-      border-radius: 8px;
-      background-color: white;
-      color: black;
-      cursor: pointer;
+    body {
+      background-color: black;
+      color: white;
     }
     video {
-      display: none;
+      display: none; /* 隐藏摄像头画面 */
+    }
+    canvas {
+      display: none; /* 隐藏绘制层 */
     }
   </style>
 </head>
 <body>
+  <h1 style="text-align: center;">Face landmark detection + 小鹅唱歌🪿</h1>
 
-<h1>小鹅说：闭上眼睛才能听音乐哦～🪿</h1>
+  <div id="goose">🪿</div>
+  <div id="gooseMessage">请点击下面按钮开启摄像头</div>
 
-<div id="goose">🪿</div>
-<div id="message">请点击下面按钮开始</div>
-<button id="startButton">开始</button>
+  <section id="demos">
+    <div id="liveView" class="videoView" style="text-align: center; margin-top: 20px;">
+      <button id="webcamButton" class="mdc-button mdc-button--raised">
+        <span class="mdc-button__ripple"></span>
+        <span class="mdc-button__label">ENABLE WEBCAM</span>
+      </button>
+      <div style="position: relative;">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas class="output_canvas" id="output_canvas"></canvas>
+      </div>
+    </div>
+  </section>
 
-<video id="video" autoplay playsinline muted></video>
+  <!-- MediaPipe Face Landmarker -->
+  <script type="module">
+    import '@mediapipe/tasks-vision/vision_bundle.mjs';
+    const vision = window.vision;
 
-<!-- ✅ 正确加载全局FaceMesh -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+    const webcamButton = document.getElementById('webcamButton');
+    const webcam = document.getElementById('webcam');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
 
-<script>
-const goose = document.getElementById('goose');
-const message = document.getElementById('message');
-const video = document.getElementById('video');
-const startButton = document.getElementById('startButton');
+    const goose = document.getElementById('goose');
+    const gooseMessage = document.getElementById('gooseMessage');
 
-let playingMusic = false;
+    let faceLandmarker;
+    let runningMode = "VIDEO";
+    let playingMusic = false;
+    const synth = new Tone.Synth().toDestination();
 
-// 音乐合成器
-const synth = new Tone.Synth().toDestination();
-function playMusic() {
-  synth.triggerAttackRelease('C4', '8n');
-  synth.triggerAttackRelease('E4', '8n', '+0.5');
-  synth.triggerAttackRelease('G4', '8n', '+1');
-}
-
-// 检测眼睛是否闭上
-function isEyesClosed(landmarks) {
-  const top = landmarks[159];
-  const bottom = landmarks[145];
-  const distance = Math.hypot(top.x - bottom.x, top.y - bottom.y);
-  return distance < 0.01; // 眼睛垂直距离小，说明闭上了
-}
-
-// 初始化FaceMesh
-const faceMesh = new FaceMesh.FaceMesh({
-  locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-});
-
-faceMesh.setOptions({
-  maxNumFaces: 1,
-  refineLandmarks: true,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
-});
-
-faceMesh.onResults(results => {
-  if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-    const landmarks = results.multiFaceLandmarks[0];
-    if (isEyesClosed(landmarks)) {
-      message.innerText = "鹅在演奏音乐🎵";
-      goose.innerText = "🎶🪿🎶";
-      if (!playingMusic) {
-        playingMusic = true;
-        Tone.start();
-        playMusic();
-      }
-    } else {
-      message.innerText = "快闭上眼睛！";
-      goose.innerText = "😠🪿";
-      playingMusic = false;
+    // 小鹅唱歌
+    function playMusic() {
+      synth.triggerAttackRelease('C4', '8n');
+      synth.triggerAttackRelease('E4', '8n', '+0.5');
+      synth.triggerAttackRelease('G4', '8n', '+1');
     }
-  }
-});
 
-// 点击开始
-startButton.addEventListener('click', async () => {
-  startButton.style.display = 'none';
-  message.innerText = "小鹅说：快闭上眼睛～";
+    // 检测眼睛是否闭上（用左右眼 landmarks）
+    function isEyesClosed(landmarks) {
+      const leftTop = landmarks[386];
+      const leftBottom = landmarks[374];
+      const rightTop = landmarks[159];
+      const rightBottom = landmarks[145];
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    await video.play();
+      const leftEyeDist = Math.hypot(leftTop.x - leftBottom.x, leftTop.y - leftBottom.y);
+      const rightEyeDist = Math.hypot(rightTop.x - rightBottom.x, rightTop.y - rightBottom.y);
 
-    const camera = new CameraUtils.Camera(video, {
-      onFrame: async () => {
-        await faceMesh.send({ image: video });
-      },
-      width: 640,
-      height: 480
+      const threshold = 0.01; // 眼睛闭合阈值，越小越闭
+      return leftEyeDist < threshold && rightEyeDist < threshold;
+    }
+
+    async function initFaceLandmarker() {
+      const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+      );
+      faceLandmarker = await vision.FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: `https://storage.googleapis.com/mediapipe-assets/face_landmarker.task`
+        },
+        outputFaceBlendshapes: true,
+        runningMode: runningMode
+      });
+    }
+
+    async function predictWebcam() {
+      const nowInMs = Date.now();
+      const results = await faceLandmarker.detectForVideo(webcam, nowInMs);
+
+      if (results.faceLandmarks.length > 0) {
+        if (isEyesClosed(results.faceLandmarks[0])) {
+          goose.innerText = "🎶🪿🎶";
+          gooseMessage.innerText = "鹅在演奏音乐🎵";
+          if (!playingMusic) {
+            playingMusic = true;
+            Tone.start();
+            playMusic();
+          }
+        } else {
+          goose.innerText = "😠🪿";
+          gooseMessage.innerText = "快闭上眼睛！";
+          playingMusic = false;
+        }
+      } else {
+        goose.innerText = "❓🪿";
+        gooseMessage.innerText = "小鹅找不到你的脸哦～";
+      }
+
+      window.requestAnimationFrame(predictWebcam);
+    }
+
+    webcamButton.addEventListener('click', async () => {
+      webcamButton.disabled = true;
+
+      await initFaceLandmarker();
+
+      const stream = await navigator.mediaDevices.getUserMedia({video: true});
+      webcam.srcObject = stream;
+
+      await new Promise((resolve) => {
+        webcam.onloadedmetadata = () => {
+          resolve();
+        };
+      });
+
+      predictWebcam();
     });
-    camera.start();
-
-  } catch (e) {
-    console.error("摄像头启动失败", e);
-    message.innerText = "无法打开摄像头，请检查权限。";
-    goose.innerText = "❌🪿";
-  }
-});
-</script>
-
+  </script>
 </body>
 </html>
